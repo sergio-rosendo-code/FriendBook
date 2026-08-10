@@ -5,13 +5,15 @@
 //  Created by Sergio Rosendo on 8/7/26.
 //
 
+import SwiftData
 import SwiftUI
 
 @main
 struct FriendBookApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            FriendsPage()
         }
+        .modelContainer(for: [User.self, Friend.self])
     }
 }
