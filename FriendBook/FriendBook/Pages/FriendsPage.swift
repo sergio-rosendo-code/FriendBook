@@ -9,10 +9,11 @@ import SwiftData
 import SwiftUI
 
 struct FriendsPage: View {
+    var userId: UUID? = nil
     @Environment(\.modelContext) private var modelContext
-    @Query private var users: [User]
-    @State private var fetchedFromServer: Int = 0
-    @State private var fetchedFromDb: Int = 0
+    @State private var users = [User]()
+    @State private var sortBy = SortBy.name
+    @State private var orderIn = OrderIn.ascending
     
     var body: some View {
         NavigationStack {
@@ -20,27 +21,77 @@ struct FriendsPage: View {
                 ForEach(users) { user in
                     Label(user.name, systemImage: "person.circle")
                 }
-                VStack(alignment: .leading) {
-                    Text("Fetched from server: \(fetchedFromServer)")
-                    Text("Fetched from db: \(fetchedFromDb)")
+            }
+            .navigationTitle("All Friends")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu("Order", systemImage: "arrow.up.arrow.down") {
+                        ForEach(OrderIn.allCases, id: \.self) { order in
+                            Button(order.rawValue) {
+                                self.orderIn = order
+                                let _ = fetchUsersFromDb()
+                            }
+                        }
+                    }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu("Sort", systemImage: "line.3.horizontal.decrease.circle") {
+                        ForEach(SortBy.allCases, id: \.self) { sort in
+                            Button(sort.rawValue) {
+                                self.sortBy = sort
+                                let _ = fetchUsersFromDb()
+                            }
+                        }
+                    }
                 }
             }
-            .toolbar {
-                Button("delete all data", systemImage: "cpu", role: .destructive, action: deleteAllData)
-            }
             .task {
-                await fetchUsers()
+                let fetchedFromDb = fetchUsersFromDb()
+                
+                if !fetchedFromDb {
+                    await fetchUsersFromServer()
+                }
             }
         }
     }
     
-    private func fetchUsers() async {
-        guard users.isEmpty else {
-            fetchedFromDb = users.count
-            return
+    private func fetchUsersFromDb() -> Bool {
+        print("Fetching users from db...")
+        
+        do {
+            var predicate: Predicate<User>?
+            
+            if let userId = self.userId {
+                predicate = #Predicate<User> { user in
+                    user.friends.contains { friend in
+                        friend.id == userId
+                    }
+                }
+            }
+            
+            let sortOrder = self.orderIn == .ascending ? SortOrder.forward : SortOrder.reverse
+            let sortDescriptor = self.sortBy == .name ? [SortDescriptor<User>(\.name, order: sortOrder)] : [SortDescriptor<User>(\.company, order: sortOrder)]
+            let descriptor = FetchDescriptor<User>(predicate: predicate, sortBy: sortDescriptor)
+
+            let fetchedUsers  = try modelContext.fetch(descriptor)
+            
+            if (!fetchedUsers.isEmpty) {
+                self.users = fetchedUsers
+                return true
+            }
+        } catch {
+            print("There was an issue fetching users from local database.")
         }
         
-        var fetchedUsers: [User] = []
+        return false
+    }
+    
+    private func fetchUsersFromServer() async {
+        print("Fetching users from server...")
+        
+        guard users.isEmpty else {
+            return
+        }
 
         do {
             let url = URL(string: "https://www.hackingwithswift.com/samples/friendface.json")!
@@ -48,23 +99,14 @@ struct FriendsPage: View {
             
             let decoder = JSONDecoder()
             decoder.dateDecodingStrategy = .iso8601
+            let fetchedUsers = try decoder.decode([User].self, from: data)
             
-            fetchedUsers = try decoder.decode([User].self, from: data)
-            
-            fetchedFromServer = fetchedUsers.count
-            
-            fetchedUsers.forEach { modelContext.insert($0) }
+            if !fetchedUsers.isEmpty {
+                self.users = fetchedUsers
+                fetchedUsers.forEach { modelContext.insert($0) }
+            }
         } catch {
             print("There was an issue fetching users from server.")
-        }
-    }
-    
-    private func deleteAllData() {
-        do {
-            try modelContext.delete(model: User.self)
-            try modelContext.delete(model:  Friend.self)
-        } catch {
-            print("There was an issue deleting all data from database.")
         }
     }
 }
