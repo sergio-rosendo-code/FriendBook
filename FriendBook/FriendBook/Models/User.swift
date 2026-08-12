@@ -20,6 +20,15 @@ class User: Codable {
     @Relationship(deleteRule: .cascade, inverse: \Friend.owner)
     var friends: [Friend]
     
+    var addressFormatted: String {
+        let parts = address.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+        
+        guard parts.count == 4 else { return "Address Not Available" }
+        
+        return "\(parts[0])\n\(parts[1]), \(parts[2]), \(parts[3])"
+        
+    }
+    
     init(id: UUID, registered: Date, name: String, company: String, email: String, address: String, about: String, friends: [Friend]) {
         self.id = id
         self.registered = registered

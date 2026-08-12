@@ -17,29 +17,37 @@ struct FriendsPage: View {
     
     var body: some View {
         NavigationStack {
-            List {
-                ForEach(users) { user in
-                    Label(user.name, systemImage: "person.circle")
+            ScrollView{
+                LazyVStack() {
+                    ForEach(users) { user in
+                        ExpandabeContactView(user: user)
+                    }
                 }
+                .padding()
             }
-            .navigationTitle("All Friends")
+            .navigationTitle("Community")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu("Order", systemImage: "arrow.up.arrow.down") {
                         ForEach(OrderIn.allCases, id: \.self) { order in
-                            Button(order.rawValue) {
+                            Button {
                                 self.orderIn = order
                                 let _ = fetchUsersFromDb()
+                            } label: {
+                                Label(order.rawValue, systemImage: order == self.orderIn ? "checkmark"  : "")
                             }
                         }
+                        .menuStyle(.button)
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu("Sort", systemImage: "line.3.horizontal.decrease.circle") {
                         ForEach(SortBy.allCases, id: \.self) { sort in
-                            Button(sort.rawValue) {
+                            Button {
                                 self.sortBy = sort
                                 let _ = fetchUsersFromDb()
+                            } label: {
+                                Label(sort.rawValue, systemImage: sort == self.sortBy ? "checkmark"  : "")
                             }
                         }
                     }
