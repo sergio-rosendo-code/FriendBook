@@ -10,10 +10,13 @@ import SwiftUI
 
 @main
 struct FriendBookApp: App {
+    @State var navigationManager = NavigationManager()
+    
     var body: some Scene {
         WindowGroup {
             FriendsPage()
         }
         .modelContainer(for: [User.self, Friend.self])
+        .environment(navigationManager)
     }
 }

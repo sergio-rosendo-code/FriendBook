@@ -10,6 +10,7 @@ import SwiftUI
 struct ExpandabeContactView: View {
     let user: User
     @State private var isExpanded: Bool = false
+    let onShowMore: (UUID, String) -> Void
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -26,15 +27,10 @@ struct ExpandabeContactView: View {
                         .font(.headline)
                         .rotationEffect(Angle(degrees: !isExpanded ? 0: -180))
                 }
-                HStack {
-                    Image(systemName: "suitcase")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                    
-                    Text(user.company)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
+                
+                Label(user.company, systemImage: "suitcase")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             }
             .contentShape(.rect)
             .onTapGesture {
@@ -56,11 +52,18 @@ struct ExpandabeContactView: View {
                             // TODO: Needs visual cue that value was copied to clipboard
                         }
                         .font(.subheadline)
-                        Button(user.addressFormatted, systemImage: "house") {
+                        Button(user.addressFormatted, systemImage: "mail") {
                             UIPasteboard.general.string = user.address
                             // TODO: Needs visual cue that value was copied to clipboard
                         }
                         .font(.subheadline)
+                    }
+                    
+                    HStack {
+                        Spacer()
+                        Button("show more") {
+                            onShowMore(user.id, user.name)
+                        }
                     }
                 }
                 .transition(.opacity)
@@ -75,6 +78,8 @@ struct ExpandabeContactView: View {
 #Preview(traits: .sizeThatFitsLayout) {
     let user = DummyData.users.first!
 
-    ExpandabeContactView(user: user)
+    ExpandabeContactView(user: user) { (_, _) in
+        
+    }
 }
  

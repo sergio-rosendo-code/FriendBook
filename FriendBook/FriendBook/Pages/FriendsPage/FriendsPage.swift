@@ -8,24 +8,32 @@
 import SwiftData
 import SwiftUI
 
+// This view is designed to either show all available users
+// OR show the friends of a specific user given the user id is provided
+
 struct FriendsPage: View {
     var userId: UUID? = nil
+    var userName: String? = nil
     @Environment(\.modelContext) private var modelContext
+    @Environment(NavigationManager.self) private var navigationManager
     @State private var users = [User]()
     @State private var sortBy = SortBy.name
     @State private var orderIn = OrderIn.ascending
     
+    
     var body: some View {
-        NavigationStack {
+        @Bindable var navigationManager = self.navigationManager
+        
+        NavigationStack(path: $navigationManager.navigationPath) {
             ScrollView{
                 LazyVStack() {
                     ForEach(users) { user in
-                        ExpandabeContactView(user: user)
+                        ExpandabeContactView(user: user, onShowMore: navigateToProfile)
                     }
                 }
                 .padding()
             }
-            .navigationTitle("Community")
+            .navigationTitle(userId != nil ? "\(userName!) Friends" : "All Users")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu("Order", systemImage: "arrow.up.arrow.down") {
@@ -53,6 +61,14 @@ struct FriendsPage: View {
                     }
                 }
             }
+            .navigationDestination(for: Route.self, destination: { route in
+                switch route {
+                case .friendsPage(let userId, let userName):
+                    FriendsPage(userId: userId, userName: userName)
+                case .profilePage(let userId):
+                    ProfilePage(userId: userId)
+                }
+            })
             .task {
                 let fetchedFromDb = fetchUsersFromDb()
                 
@@ -66,23 +82,33 @@ struct FriendsPage: View {
     private func fetchUsersFromDb() -> Bool {
         print("Fetching users from db...")
         
-        do {
+        do {            
             var predicate: Predicate<User>?
+            var descriptor: FetchDescriptor<User>
+            var fetchedUsers: [User]
+            let sortOrder = self.orderIn == .ascending ? SortOrder.forward : SortOrder.reverse
+            let sortDescriptor = self.sortBy == .name ? [SortDescriptor<User>(\.name, order: sortOrder)] : [SortDescriptor<User>(\.company, order: sortOrder)]
             
             if let userId = self.userId {
                 predicate = #Predicate<User> { user in
-                    user.friends.contains { friend in
-                        friend.id == userId
+                    user.id == userId
+                }
+                
+                descriptor = FetchDescriptor<User>(predicate: predicate)
+                fetchedUsers = try modelContext.fetch(descriptor)
+                
+                if let fetchedUser = fetchedUsers.first {
+                    let friendIds = fetchedUser.friends.map(\.id)
+                
+                    predicate = #Predicate<User> { user in
+                        friendIds.contains(user.id)
                     }
                 }
             }
             
-            let sortOrder = self.orderIn == .ascending ? SortOrder.forward : SortOrder.reverse
-            let sortDescriptor = self.sortBy == .name ? [SortDescriptor<User>(\.name, order: sortOrder)] : [SortDescriptor<User>(\.company, order: sortOrder)]
-            let descriptor = FetchDescriptor<User>(predicate: predicate, sortBy: sortDescriptor)
+            descriptor = FetchDescriptor<User>(predicate: predicate, sortBy: sortDescriptor)
+            fetchedUsers  = try modelContext.fetch(descriptor)
 
-            let fetchedUsers  = try modelContext.fetch(descriptor)
-            
             if (!fetchedUsers.isEmpty) {
                 self.users = fetchedUsers
                 return true
@@ -117,9 +143,23 @@ struct FriendsPage: View {
             print("There was an issue fetching users from server.")
         }
     }
+    
+    private func navigateToProfile(userId: UUID, userName: String){
+        self.navigationManager.push(route: .profilePage(userId: userId))
+    }
 }
 
 #Preview {
-    FriendsPage()
-        .modelContainer(for: [User.self, Friend.self], inMemory: true)
+    let container = try! ModelContainer(
+        for: User.self, Friend.self,
+        configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+    )
+
+    let context = container.mainContext
+    context.insertAll(DummyData.users)
+    try? context.save()
+    
+    return FriendsPage()
+        .modelContainer(container)
+        .environment(NavigationManager())
 }
